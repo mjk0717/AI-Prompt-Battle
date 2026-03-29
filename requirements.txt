@@ -1,0 +1,6 @@
+Flask==3.1.0
+Flask-SocketIO==5.5.1
+python-socketio==5.12.1
+gevent>=24.0.0
+gevent-websocket>=0.10.1
+google-genai>=1.30.0

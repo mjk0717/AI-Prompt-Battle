@@ -1,0 +1,26 @@
+{
+  "image_api": {
+    "provider": "gemini",
+    "model": "gemini-2.5-flash-image",
+    "max_input_tokens": 65536,
+    "generation_config": {
+      "response_modalities": [
+        "IMAGE"
+      ],
+      "image_config": {
+        "aspect_ratio": "1:1"
+      }
+    },
+    "timeout": 180
+  },
+  "judge_api": {
+    "provider": "gemini",
+    "model": "gemini-3-flash-preview",
+    "stream": true,
+    "generation_config": {
+      "response_mime_type": "application/json",
+      "temperature": 1.0
+    },
+    "timeout": 180
+  }
+}
