@@ -1,5 +1,4 @@
 import base64
-import getpass
 import json
 import logging
 import os
@@ -1007,7 +1006,7 @@ def prompt_runtime_gemini_api_key():
 
     prompt = "Enter Gemini API key for this server run (leave blank to use stub mode): "
     try:
-        RUNTIME_GEMINI_API_KEY = getpass.getpass(prompt).strip()
+        RUNTIME_GEMINI_API_KEY = input(prompt).strip()
     except (EOFError, KeyboardInterrupt):
         print("\nGemini API key input canceled. Starting in stub mode.", flush=True)
         RUNTIME_GEMINI_API_KEY = ""
