@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from urllib import request as urllib_request
@@ -37,7 +37,7 @@ def ensure_directories():
 
 
 def now_iso():
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def build_log_file_path():
