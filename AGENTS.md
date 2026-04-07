@@ -10,6 +10,7 @@
 - Players are assigned to teams by a manager.
 - The manager is responsible for starting the game, presenting the reference image, requesting AI judgment when needed or when a manual check fails, entering scores, and advancing to the next round.
 - Players are responsible for entering team prompts, generating images, and submitting their final drawings.
+- The game use Gemini for AI, and call the API using a key issued by Google AI Studio.
 
 ## rules
 - Do not change line endings unless necessary.

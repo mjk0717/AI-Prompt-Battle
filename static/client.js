@@ -334,7 +334,7 @@ function renderEntry() {
       <p>닉네임을 입력하면 기존 세션으로 복귀하거나 새로운 참가 세션을 만듭니다.</p>
       <div class="panel">
         <h3>닉네임 입력</h3>
-        <input id="nickname-input" type="text" maxlength="30" placeholder="예: 노래하는 제이지" value="${escapeHtml(state.nickname)}" oninput="syncNickname()">
+        <input id="nickname-input" type="text" maxlength="30" placeholder="예: 노래하는 하루" value="${escapeHtml(state.nickname)}" oninput="syncNickname()">
         <div class="button-row" style="margin-top:12px">
           <button class="accent" onclick="submitNickname()">참가</button>
         </div>

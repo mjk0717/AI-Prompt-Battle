@@ -1,4 +1,5 @@
 import base64
+import getpass
 import json
 import logging
 import os
@@ -29,6 +30,7 @@ MAX_ROUNDS = 3
 ROUND_SECONDS = 600
 MAX_GENERATIONS = 3
 MAX_SHARED_PROMPT_LENGTH = 50
+RUNTIME_GEMINI_API_KEY = ""
 
 
 def ensure_directories():
@@ -81,22 +83,6 @@ def log_game_event(event: str, **fields):
         **fields,
     }
     game_logger.info(json.dumps(payload, ensure_ascii=False))
-
-
-def write_json(path: Path, payload):
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def read_json(path: Path, default):
-    if not path.exists():
-        write_json(path, default)
-        return deepcopy(default)
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        write_json(path, default)
-        return deepcopy(default)
-
 
 def default_state():
     return {
@@ -918,13 +904,6 @@ def detect_image_mime(image_bytes: bytes):
         return "image/gif"
     return "application/octet-stream"
 
-
-def encode_image_bytes(image_bytes: bytes, mime_type: str | None = None):
-    resolved_mime_type = mime_type or detect_image_mime(image_bytes)
-    encoded = base64.b64encode(image_bytes).decode("ascii")
-    return f"data:{resolved_mime_type};base64,{encoded}"
-
-
 def parse_json_from_text(text: str):
     stripped = text.strip()
     if stripped.startswith("```"):
@@ -1020,7 +999,24 @@ def compact_log_payload(payload, *, max_depth=3, max_items=5, max_string_length=
 
 
 def resolve_gemini_api_key(api_config: dict):
-    return str(os.environ.get("GEMINI_API_KEY", "")).strip()
+    return RUNTIME_GEMINI_API_KEY
+
+
+def prompt_runtime_gemini_api_key():
+    global RUNTIME_GEMINI_API_KEY
+
+    prompt = "Enter Gemini API key for this server run (leave blank to use stub mode): "
+    try:
+        RUNTIME_GEMINI_API_KEY = getpass.getpass(prompt).strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\nGemini API key input canceled. Starting in stub mode.", flush=True)
+        RUNTIME_GEMINI_API_KEY = ""
+        return
+
+    if RUNTIME_GEMINI_API_KEY:
+        print("Gemini API key loaded for this server run.", flush=True)
+    else:
+        print("No Gemini API key entered. Starting in stub mode.", flush=True)
 
 
 def load_image_bytes_for_gemini(image_url: str):
@@ -2026,77 +2022,6 @@ def on_generate_image(data):
 def handle_team_generate_image(data):
     client = store.get_client(data.get("sessionToken"))
     if not client or not client.get("team_id"):
-        emit("session:error", {"message": "팀 배정 후 사용할 수 있습니다."})
-        return
-
-    round_state = store.current_round()
-    if not round_state or round_state["status"] != "running":
-        emit("session:error", {"message": "진행 중인 라운드가 없습니다."})
-        return
-
-    team_id = client["team_id"]
-    round_number = round_state["round_number"]
-    team_state = round_state["teams"][team_id]
-    if team_state["submitted"]:
-        emit("session:error", {"message": "이미 제출한 라운드입니다."})
-        return
-    if not store.start_team_generation(round_number, team_id):
-        emit("session:error", {"message": "현재 우리 팀의 이미지 생성이 이미 진행 중입니다."})
-        return
-    if team_state["generations_used"] >= MAX_GENERATIONS:
-        store.finish_team_generation(round_number, team_id)
-        broadcast_state()
-        emit("session:error", {"message": f"이미지 생성은 팀당 {MAX_GENERATIONS}회까지 가능합니다."})
-        return
-
-    prompt = data.get("prompt", "").strip()
-    if not prompt:
-        prompt = "\n".join(
-            note["text"].strip() for note in team_state.get("notes", []) if note.get("text", "").strip()
-        )
-    if not prompt:
-        emit("session:error", {"message": "팀 프롬프트를 먼저 입력하거나 공유해주세요."})
-        return
-
-    if not prompt:
-        store.finish_team_generation(round_number, team_id)
-        store.finish_team_generation(round_number, team_id)
-        emit("session:error", {"message": "팀 프롬프트를 먼저 입력하거나 공유해주세요."})
-        return
-
-    prompt_debug_payload = {
-        "event": "team:generate_image",
-        "round_number": round_number,
-        "team_id": team_id,
-        "nickname": client["nickname"],
-        "name": client["name"],
-        "shared_notes": [
-            {
-                "id": note.get("id"),
-                "text": note.get("text", ""),
-                "author": note.get("author"),
-                "created_at": note.get("created_at"),
-            }
-            for note in team_state.get("notes", [])
-        ],
-        "request_prompt": data.get("prompt", ""),
-        "resolved_prompt": prompt,
-    }
-    print(json.dumps(prompt_debug_payload, ensure_ascii=False, indent=2), flush=True)
-
-    socketio.start_background_task(
-        run_team_image_generation_async,
-        request_sid=request.sid,
-        round_number=round_number,
-        team_id=team_id,
-        prompt=prompt,
-    )
-    return
-
-
-def handle_team_generate_image(data):
-    client = store.get_client(data.get("sessionToken"))
-    if not client or not client.get("team_id"):
         emit("session:error", {"message": "팀 배정된 사용자만 이미지를 생성할 수 있습니다."})
         return
 
@@ -2218,9 +2143,12 @@ def generated_file(name):
 
 
 if __name__ == "__main__":
-    threading.Thread(target=timer_loop, daemon=True).start()
     resolved_port = int(os.environ.get("PORT", "5000"))
     debug_enabled = os.environ.get("FLASK_DEBUG", "").lower() in {"1", "true", "yes", "on"}
+    should_prompt_for_key = not debug_enabled or os.environ.get("WERKZEUG_RUN_MAIN") == "true"
+    if should_prompt_for_key:
+        prompt_runtime_gemini_api_key()
+    threading.Thread(target=timer_loop, daemon=True).start()
     print(f"Running on http://127.0.0.1:{resolved_port}", flush=True)
     print(f"Running on http://0.0.0.0:{resolved_port}", flush=True)
     log_game_event(
